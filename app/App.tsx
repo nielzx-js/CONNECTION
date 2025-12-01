@@ -3,7 +3,7 @@ import { SafeAreaView, StatusBar, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import AuthFlowNavigator from './src/navigation/AuthFlowNavigator';
 
-function RootContainer({ children }) {
+function RootContainer({ children }: { children: React.ReactNode }) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F3F4F6" />

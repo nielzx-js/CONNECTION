@@ -2,38 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../config/supabase';
 import { Session } from '@supabase/supabase-js';
 
-// Importa os componentes de tela de autenticação
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import VerifyOTPScreen from '../screens/VerifyOTPScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 
-// Importa o navegador principal para usuários logados
 import AppNavigator from '../screens/AppNavigator';
 
-type AuthScreen = 'login' | 'register' | 'verifyOtp';
+type AuthScreen = 'login' | 'register' | 'verifyOtp' | 'forgotPassword';
 
 export default function AuthFlowNavigator() {
   const [session, setSession] = useState<Session | null>(null);
   const [currentScreen, setCurrentScreen] = useState<AuthScreen>('login');
-  const [emailForVerification, setEmailForVerification] = useState('');
 
-  // 1. Efeito para lidar com a sessão de autenticação
+  const [emailForVerification, setEmailForVerification] = useState('');
+  const [otpType, setOtpType] = useState<'signup' | 'recovery'>('signup');
+
   useEffect(() => {
-    // Tenta obter a sessão na montagem
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
     });
 
-    // Cria o listener para mudanças de estado de autenticação
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      // Se a sessão cair, volta para o login
+
       if (!session) {
         setCurrentScreen('login');
       }
     });
 
-    // Função de limpeza do listener
     return () => {
       authListener.subscription.unsubscribe();
     };
@@ -41,19 +38,29 @@ export default function AuthFlowNavigator() {
 
   const handleRegistrationSuccess = (email: string) => {
     setEmailForVerification(email);
+    setOtpType('signup');
     setCurrentScreen('verifyOtp');
   };
 
-  // 2. Renderização do Conteúdo
-  // Se houver sessão, carrega o navegador principal (Abas)
+  const handleRecoverySuccess = (email: string) => {
+    setEmailForVerification(email);
+    setOtpType('recovery');
+    setCurrentScreen('verifyOtp');
+  };
+
   if (session && session.user) {
     return <AppNavigator />;
   }
 
-  // Se não houver sessão, renderiza as telas de autenticação
   switch (currentScreen) {
     case 'login':
-      return <LoginScreen onNavigateToRegister={() => setCurrentScreen('register')} />;
+      return (
+        <LoginScreen
+          onNavigateToRegister={() => setCurrentScreen('register')}
+          onNavigateToForgotPassword={() => setCurrentScreen('forgotPassword')}
+        />
+      );
+
     case 'register':
       return (
         <RegisterScreen
@@ -61,9 +68,29 @@ export default function AuthFlowNavigator() {
           onNavigateToLogin={() => setCurrentScreen('login')}
         />
       );
+
+    case 'forgotPassword':
+      return (
+        <ForgotPasswordScreen
+          onNavigateBack={() => setCurrentScreen('login')}
+          onSendRecoveryCodeSuccess={handleRecoverySuccess}
+        />
+      );
+
     case 'verifyOtp':
-      return <VerifyOTPScreen email={emailForVerification} />;
+      return (
+        <VerifyOTPScreen
+          email={emailForVerification}
+          otpType={otpType}
+          onPasswordResetSuccess={() => setCurrentScreen('login')}
+        />
+      );
+
     default:
-      return <LoginScreen onNavigateToRegister={() => setCurrentScreen('register')} />;
+      return (
+        <LoginScreen
+          onNavigateToRegister={() => setCurrentScreen('register')}
+        />
+      );
   }
 }

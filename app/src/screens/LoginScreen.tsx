@@ -4,9 +4,11 @@ import { supabase } from '../config/supabase';
 
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
+
+  onNavigateToForgotPassword: () => void; 
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, onNavigateToForgotPassword }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,7 +59,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister }) => {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => Alert.alert("Funcionalidade", "Tela de recuperação em desenvolvimento.")}>
+     
+        <TouchableOpacity style={styles.forgotPasswordButton} onPress={onNavigateToForgotPassword}>
           <Text style={styles.linkText}>Esqueceu sua senha?</Text>
         </TouchableOpacity>
 

@@ -58,13 +58,13 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegistrationSuccess, 
 
     setLoading(true);
 
-    // Passo 1: Criar o usuário na autenticação
+
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: email,
       password: password,
       options: {
         data: {
-          full_name: name,
+          full_name: name, 
         },
       },
     });
@@ -75,18 +75,6 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onRegistrationSuccess, 
       return;
     }
 
-    // Passo 2: Salvar o nome na tabela 'usuarios'
-    if (authData.user) {
-      const { error: profileError } = await supabase
-        .from('usuarios')
-        .update({ full_name: name })
-        .eq('id', authData.user.id);
-
-      if (profileError) {
-        console.error("Erro ao salvar perfil:", profileError);
-        Alert.alert('Aviso', 'Sua conta foi criada, mas houve um erro ao salvar seu nome.');
-      }
-    }
 
     setLoading(false);
 

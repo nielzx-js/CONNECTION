@@ -5,37 +5,29 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../config/supabase';
 
-// Telas do seu projeto
 import HomeScreen from './HomeScreen';
 import MapScreen from './Mapscreen';
 import StatsScreen from './StatsScreen';
 import SettingsScreen from './SettingsScreen';
 import RegisterLocalScreen from './RegisterLocalScreen';
+import ForgotPasswordScreen from './ForgotPasswordScreen';
 
-// ----------------------------------------------------------------------
-// 0. TIPOS
-// ----------------------------------------------------------------------
-
-// Tipos para o Stack de Configurações
 type ConfigStackParamList = {
   SettingsMain: undefined;
 };
 
-// Tipos para o Stack de Registro Local
 type RegisterLocalStackParamList = {
   RegisterLocal: undefined;
 };
 
-// Tipos para o Tab Navigator (Root)
 export type RootTabParamList = {
   Início: undefined;
   Mapa: undefined;
   Estatísticas: undefined;
   Configurações: undefined;
-  RegisterLocalStack: undefined; // Oculta
+  RegisterLocalStack: undefined;
 };
 
-// Tipos auxiliares
 type TabIconProps = {
   color: string;
   size: number;
@@ -51,21 +43,14 @@ type UserProfile = {
   [key: string]: string | number | null | undefined;
 };
 
-// Campos obrigatórios
 const REQUIRED_FIELDS = ['cpf', 'data_nascimento', 'cidade_residencia', 'empresa', 'cargo'];
 
-// Cores da tab
 const ACTIVE_COLOR = '#2563eb';
 const INACTIVE_COLOR = '#64748b';
-
-// ----------------------------------------------------------------------
-// 1. STACK NAVIGATORS
-// ----------------------------------------------------------------------
 
 const ConfigStack = createNativeStackNavigator<ConfigStackParamList>();
 const RegisterLocalStack = createNativeStackNavigator<RegisterLocalStackParamList>();
 
-// ✅ CORREÇÃO AQUI
 function ConfigStackScreen() {
   return (
     <ConfigStack.Navigator screenOptions={{ headerShown: false }}>
@@ -74,7 +59,6 @@ function ConfigStackScreen() {
   );
 }
 
-// ✅ CORREÇÃO AQUI
 function RegisterLocalStackScreen() {
   return (
     <RegisterLocalStack.Navigator screenOptions={{ headerShown: false }}>
@@ -83,14 +67,10 @@ function RegisterLocalStackScreen() {
   );
 }
 
-// ----------------------------------------------------------------------
-// 2. FUNÇÃO DE VERIFICAÇÃO DE PERFIL
-// ----------------------------------------------------------------------
-
 const checkProfileCompleteness = async (): Promise<boolean> => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return true; // usuário não logado => assume completo
+    if (!user) return true;
 
     const { data, error } = await supabase
       .from('usuarios')
@@ -110,16 +90,12 @@ const checkProfileCompleteness = async (): Promise<boolean> => {
       );
     }
 
-    return false; // perfil não encontrado
+    return false;
   } catch (e) {
     console.error('Falha ao verificar completude do perfil:', e);
     return false;
   }
 };
-
-// ----------------------------------------------------------------------
-// 3. COMPONENTE PRINCIPAL
-// ----------------------------------------------------------------------
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
@@ -129,14 +105,12 @@ export default function AppNavigator() {
 
   useEffect(() => {
     const setupListener = async () => {
-      // Verifica completude inicial
       const isComplete = await checkProfileCompleteness();
       setIsConfigIncomplete(!isComplete);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Listener Realtime para atualizações do perfil
       authListenerRef.current = supabase
         .channel('public:usuarios_channel')
         .on('postgres_changes', {
@@ -158,7 +132,6 @@ export default function AppNavigator() {
     };
   }, []);
   
-  // ✅ CORREÇÃO AQUI
   return (
     <Tab.Navigator
       initialRouteName="Início"
@@ -175,7 +148,6 @@ export default function AppNavigator() {
         tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
       }}
     >
-      {/* As telas agora são "filhas" do Tab.Navigator */}
       <Tab.Screen
         name="Início"
         component={HomeScreen}
