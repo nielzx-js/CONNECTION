@@ -14,9 +14,8 @@ type AuthScreen = 'login' | 'register' | 'verifyOtp' | 'forgotPassword';
 export default function AuthFlowNavigator() {
   const [session, setSession] = useState<Session | null>(null);
   const [currentScreen, setCurrentScreen] = useState<AuthScreen>('login');
-
-  const [emailForVerification, setEmailForVerification] = useState('');
-  const [otpType, setOtpType] = useState<'signup' | 'recovery'>('signup');
+  
+  const [emailForVerification, setEmailForVerification] = useState('');  const [otpType, setOtpType] = useState<'signup' | 'recovery'>('signup');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -90,6 +89,7 @@ export default function AuthFlowNavigator() {
       return (
         <LoginScreen
           onNavigateToRegister={() => setCurrentScreen('register')}
+          onNavigateToForgotPassword={() => setCurrentScreen('forgotPassword')}
         />
       );
   }

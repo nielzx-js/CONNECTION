@@ -4,7 +4,6 @@ import { supabase } from '../config/supabase';
 
 interface LoginScreenProps {
   onNavigateToRegister: () => void;
-
   onNavigateToForgotPassword: () => void; 
 }
 
@@ -39,6 +38,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, onNavig
         <TextInput
           style={styles.input}
           placeholder="seuemail@exemplo.com"
+          placeholderTextColor="#64748b" // slate-500
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -50,6 +50,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, onNavig
           <TextInput
             style={styles.inputPassword}
             placeholder="Sua senha"
+            placeholderTextColor="#64748b"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!isPasswordVisible}
@@ -58,11 +59,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, onNavig
             <Text style={styles.eyeText}>{isPasswordVisible ? 'Ocultar' : 'Ver'}</Text>
           </TouchableOpacity>
         </View>
-
-     
-        <TouchableOpacity style={styles.forgotPasswordButton} onPress={onNavigateToForgotPassword}>
-          <Text style={styles.linkText}>Esqueceu sua senha?</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Entrar</Text>}
@@ -79,22 +75,115 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigateToRegister, onNavig
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 16, backgroundColor: '#F3F4F6' },
-  card: { width: '100%', maxWidth: 400, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 8 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#333', marginBottom: 20, textAlign: 'center' },
-  label: { fontSize: 14, fontWeight: '600', color: '#4B5563', marginBottom: 4, marginTop: 10 },
-  input: { height: 50, borderColor: '#D1D5DB', borderWidth: 1, borderRadius: 8, paddingHorizontal: 15, marginBottom: 10, fontSize: 16, backgroundColor: '#F9FAFB' },
-  passwordContainer: { flexDirection: 'row', alignItems: 'center', borderColor: '#D1D5DB', borderWidth: 1, borderRadius: 8, backgroundColor: '#F9FAFB' },
-  inputPassword: { flex: 1, height: 50, paddingHorizontal: 15, fontSize: 16, borderRightWidth: 0, borderWidth: 0 },
-  eyeButton: { padding: 10 },
-  eyeText: { color: '#059669', fontWeight: '600' },
-  forgotPasswordButton: { alignSelf: 'flex-end', paddingVertical: 5, marginBottom: 10 },
-  button: { backgroundColor: '#059669', paddingVertical: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  buttonDisabled: { backgroundColor: '#A7F3D0' },
-  buttonText: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  registerButton: { marginTop: 20, padding: 5, alignItems: 'center' },
-  linkText: { color: '#6B7280', fontSize: 14 },
-  linkHighlight: { color: '#059669', fontWeight: 'bold' }
+  container: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 16, 
+    backgroundColor: '#0f172a' // slate-950 (Fundo principal)
+  },
+
+  card: { 
+    width: '100%', 
+    maxWidth: 400, 
+    backgroundColor: '#1e293b', // slate-800 (Fundo do card)
+    borderRadius: 12, 
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#334155' // slate-700 (Borda sutil)
+  },
+
+  title: { 
+    fontSize: 26, 
+    fontWeight: 'bold', 
+    color: '#f8fafc', // slate-50
+    marginBottom: 20, 
+    textAlign: 'center' 
+  },
+
+  label: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: '#94a3b8', // slate-400
+    marginBottom: 6, 
+    marginTop: 10 
+  },
+
+  input: { 
+    height: 50, 
+    borderColor: '#334155', 
+    borderWidth: 1, 
+    borderRadius: 8, 
+    paddingHorizontal: 15, 
+    marginBottom: 10, 
+    fontSize: 16, 
+    backgroundColor: '#0f172a', // Input levemente mais escuro que o card
+    color: '#f1f5f9' 
+  },
+
+  passwordContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    borderColor: '#334155', 
+    borderWidth: 1, 
+    borderRadius: 8, 
+    backgroundColor: '#0f172a'
+  },
+
+  inputPassword: { 
+    flex: 1, 
+    height: 50, 
+    paddingHorizontal: 15, 
+    fontSize: 16,
+    color: '#f1f5f9'
+  },
+
+  eyeButton: { 
+    padding: 10,
+    minWidth: 60
+  },
+
+  eyeText: { 
+    color: '#3b82f6', // azul brilhante para destaque
+    fontWeight: '700' 
+  },
+
+  button: { 
+    backgroundColor: '#2563eb', // azul consistente com o SaveBtn
+    paddingVertical: 15, 
+    borderRadius: 8, 
+    alignItems: 'center', 
+    marginTop: 25,
+    width: '100%'
+  },
+
+  buttonDisabled: { 
+    backgroundColor: '#1d4ed8',
+    opacity: 0.6
+  },
+
+  buttonText: { 
+    color: '#FFFFFF', 
+    fontSize: 18, 
+    fontWeight: 'bold',
+    textAlign: 'center'
+  },
+
+  registerButton: { 
+    marginTop: 20, 
+    padding: 5, 
+    alignItems: 'center' 
+  },
+
+  linkText: { 
+    color: '#94a3b8', 
+    fontSize: 14 
+  },
+
+  linkHighlight: { 
+    color: '#3b82f6', 
+    fontWeight: 'bold' 
+  }
 });
 
 export default LoginScreen;

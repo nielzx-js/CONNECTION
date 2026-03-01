@@ -1,4 +1,3 @@
-
 export type LocalCadastrado = {
     latitude: number;
     longitude: number;
@@ -11,83 +10,101 @@ export type LocalCadastrado = {
     tipo_local: 'Residencia' | 'Trabalho';
 };
 
+export async function geocodeCEP(
+    cep: string,
+    tipo: 'Residencia' | 'Trabalho'
+): Promise<LocalCadastrado | null> {
 
-export async function geocodeCEP(cep: string, tipo: 'Residencia' | 'Trabalho'): Promise<LocalCadastrado | null> {
     const cepClean = cep.replace(/\D/g, '');
-    if (cepClean.length !== 8) return null;
+
+    if (cepClean.length !== 8) {
+        console.warn("[GEO] CEP inválido:", cepClean);
+        return null;
+    }
 
     try {
-      
+        // 🔹 1️⃣ Busca dados do endereço no ViaCEP
         const viaCepResponse = await fetch(`https://viacep.com.br/ws/${cepClean}/json/`);
-        const addressData = await viaCepResponse.json();
 
-        if (addressData.erro) {
-            console.warn(`[GEO] CEP ${cepClean} não encontrado pelo ViaCEP.`);
+        if (!viaCepResponse.ok) {
+            console.error("[GEO] Erro na requisição ViaCEP");
             return null;
         }
 
-        const { logradouro, localidade, uf, bairro } = addressData;
-       
- 
-        const fullAddress = `${logradouro}, ${bairro}, ${localidade}, ${uf}, Brasil`;
-        
-        const simplifiedAddress = `${localidade}, ${uf}, Brasil`; 
+        const addressData = await viaCepResponse.json();
 
-        const addressesToTry = [fullAddress];
-
-  
-        if (fullAddress !== simplifiedAddress) {
-             addressesToTry.push(simplifiedAddress);
+        if (!addressData || addressData.erro) {
+            console.warn(`[GEO] CEP ${cepClean} não encontrado no ViaCEP.`);
+            return null;
         }
+
+        const logradouro = addressData.logradouro || "";
+        const bairro = addressData.bairro || "";
+        const localidade = addressData.localidade || "";
+        const uf = addressData.uf || "";
+
+        if (!localidade || !uf) {
+            console.warn("[GEO] Localidade ou UF inválida.");
+            return null;
+        }
+
+        // 🔹 2️⃣ Monta endereços para tentativa de geocodificação
+        const fullAddress = [logradouro, bairro, localidade, uf, "Brasil"]
+            .filter(Boolean)
+            .join(", ");
+
+        const simplifiedAddress = `${localidade}, ${uf}, Brasil`;
+
+        const addressesToTry = fullAddress !== simplifiedAddress
+            ? [fullAddress, simplifiedAddress]
+            : [fullAddress];
 
         let latitude: number | undefined;
         let longitude: number | undefined;
 
+        // 🔹 3️⃣ Tenta geocodificar via Nominatim
         for (const addressQuery of addressesToTry) {
-            console.log(`[GEO] Tentando geocodificar CEP ${cepClean} com a query: ${addressQuery}`);
-            
-          
-            const nominatimUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addressQuery)}&format=json&limit=1&countrycodes=br`;
-            
+
+            const nominatimUrl =
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addressQuery)}&format=json&limit=1&countrycodes=br`;
+
             const geoResponse = await fetch(nominatimUrl, {
                 headers: {
-                    'User-Agent': 'SeuAppReactNative/1.0 (seu.email@exemplo.com)' 
+                    "User-Agent": "AppReactNative/1.0"
                 }
             });
+
+            if (!geoResponse.ok) continue;
+
             const geoData = await geoResponse.json();
 
-            if (geoData.length > 0) {
-         
+            if (Array.isArray(geoData) && geoData.length > 0) {
                 latitude = parseFloat(geoData[0].lat);
                 longitude = parseFloat(geoData[0].lon);
-                console.log(`[GEO] Sucesso na geocodificação para o CEP ${cepClean}.`);
-                break; // Sai do loop
+                break;
             }
         }
-        
-
 
         if (latitude === undefined || longitude === undefined) {
-
-             console.error(`[GEO] Geocodificação de Lat/Lon falhou para o CEP ${cepClean} após fallback.`);
-             return null;
+            console.error(`[GEO] Falha ao obter latitude/longitude para CEP ${cepClean}`);
+            return null;
         }
 
-
+        // 🔹 4️⃣ Retorno final estruturado
         return {
-            latitude: latitude,
-            longitude: longitude,
+            latitude,
+            longitude,
             nome_local: tipo === 'Residencia' ? 'Residência' : 'Trabalho',
             cep: cepClean,
-            endereco_nome: logradouro,
+            endereco_nome: logradouro || localidade,
             municipio: localidade,
-            uf: uf,
-            pais: 'BR', 
+            uf,
+            pais: "Brasil",
             tipo_local: tipo,
         };
 
     } catch (error) {
-        console.error(`[GEO] Erro inesperado na geocodificação do CEP ${cepClean}:`, error);
+        console.error(`[GEO] Erro inesperado ao geocodificar CEP ${cepClean}:`, error);
         return null;
     }
 }

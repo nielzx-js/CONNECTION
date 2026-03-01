@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Platform } from 'react-native';
+import { View, Text, Platform, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
@@ -10,7 +10,16 @@ import MapScreen from './Mapscreen';
 import StatsScreen from './StatsScreen';
 import SettingsScreen from './SettingsScreen';
 import RegisterLocalScreen from './RegisterLocalScreen';
-import ForgotPasswordScreen from './ForgotPasswordScreen';
+
+// Cores do Tema Dark
+const DARK_COLORS = {
+  background: '#1e293b', // slate-800 (Fundo da TabBar)
+  border: '#334155',     // slate-700
+  active: '#3b82f6',     // blue-500
+  inactive: '#94a3b8',   // slate-400
+  text: '#f8fafc',       // slate-50
+  alert: '#ef4444',      // red-500
+};
 
 type ConfigStackParamList = {
   SettingsMain: undefined;
@@ -44,9 +53,6 @@ type UserProfile = {
 };
 
 const REQUIRED_FIELDS = ['cpf', 'data_nascimento', 'cidade_residencia', 'empresa', 'cargo'];
-
-const ACTIVE_COLOR = '#2563eb';
-const INACTIVE_COLOR = '#64748b';
 
 const ConfigStack = createNativeStackNavigator<ConfigStackParamList>();
 const RegisterLocalStack = createNativeStackNavigator<RegisterLocalStackParamList>();
@@ -137,22 +143,31 @@ export default function AppNavigator() {
       initialRouteName="Início"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: ACTIVE_COLOR,
-        tabBarInactiveTintColor: INACTIVE_COLOR,
+        tabBarActiveTintColor: DARK_COLORS.active,
+        tabBarInactiveTintColor: DARK_COLORS.inactive,
         tabBarStyle: {
-          height: Platform.OS === 'ios' ? 90 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 25 : 5,
-          paddingTop: 5,
-          backgroundColor: '#fff'
+          height: Platform.OS === 'ios' ? 90 : 70,
+          paddingBottom: Platform.OS === 'ios' ? 30 : 10,
+          paddingTop: 10,
+          backgroundColor: DARK_COLORS.background,
+          borderTopWidth: 1,
+          borderTopColor: DARK_COLORS.border,
+          elevation: 0, // Remove sombra no Android
         },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
+        tabBarLabelStyle: { 
+          fontSize: 12, 
+          fontWeight: '600',
+          marginTop: 2 
+        }
       }}
     >
       <Tab.Screen
         name="Início"
         component={HomeScreen}
         options={{
-          tabBarIcon: ({ color, size }: TabIconProps) => <Feather name="home" color={color} size={size} />
+          tabBarIcon: ({ color, size }: TabIconProps) => (
+            <Feather name="home" color={color} size={size} />
+          )
         }}
       />
 
@@ -171,6 +186,7 @@ export default function AppNavigator() {
           tabBarIcon: ({ color, size }: TabIconProps) => <Feather name="trending-up" color={color} size={size} />
         }}
       />
+    
 
       <Tab.Screen
         name="Configurações"
@@ -180,20 +196,8 @@ export default function AppNavigator() {
             <View>
               <Feather name="settings" color={color} size={size} />
               {isConfigIncomplete && (
-                <View style={{
-                  position: 'absolute',
-                  right: -6,
-                  top: -6,
-                  backgroundColor: 'red',
-                  borderRadius: 7.5,
-                  width: 15,
-                  height: 15,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  borderWidth: 2,
-                  borderColor: '#fff'
-                }}>
-                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold', lineHeight: 12 }}>!</Text>
+                <View style={navStyles.alertBadge}>
+                  <Text style={navStyles.alertText}>!</Text>
                 </View>
               )}
             </View>
@@ -209,3 +213,25 @@ export default function AppNavigator() {
     </Tab.Navigator>
   );
 }
+
+const navStyles = StyleSheet.create({
+  alertBadge: {
+    position: 'absolute',
+    right: -6,
+    top: -6,
+    backgroundColor: DARK_COLORS.alert,
+    borderRadius: 8,
+    width: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: DARK_COLORS.background,
+  },
+  alertText: { 
+    color: '#fff', 
+    fontSize: 10, 
+    fontWeight: 'bold', 
+    lineHeight: 12 
+  }
+});

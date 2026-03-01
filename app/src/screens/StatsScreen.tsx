@@ -11,6 +11,7 @@ const screenWidth = Dimensions.get('window').width;
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f97316', '#ef4444', '#8b5cf6', '#ec4899'];
 
 interface ItemCount {
+    id: string;
     name: string;
     count: number;
     color?: string;
@@ -35,11 +36,10 @@ export default function StatsScreen() {
 
     const [kpiData, setKpiData] = useState({
         totalUsers: 0,
-        onlineUsers: 0, 
         totalLocations: 0,
-        totalResidencias: 0, 
-        totalTrabalho: 0, 
-        totalInstitutions: 0, 
+        totalResidencias: 0,
+        totalTrabalho: 0,
+        totalInstitutions: 0,
         taxaAtividade: '0.0',
     });
     
@@ -47,128 +47,188 @@ export default function StatsScreen() {
     const [topInstitutions, setTopInstitutions] = useState<ItemCount[]>([]);
     const [topCompanies, setTopCompanies] = useState<ItemCount[]>([]);
 
-    const fetchStats = useCallback(async () => {
-        try {
-            setLoading(true);
-            
-            const { data: { user } } = await supabase.auth.getUser();
-            const myId = user?.id;
+  const fetchStats = useCallback(async () => {
+    try {
+        setLoading(true);
 
-            const { data: usersWithLocals, error: errUsers } = await supabase
-                .from('usuarios')
-                .select('id, cargo, created_at, cnpj, superior_instituicao, locais_cadastrados'); 
-            
-            if (errUsers) throw errUsers;
+        const { data, error } = await supabase
+            .from('usuarios')
+            .select(`
+                id,
+                cargo,
+                created_at,
+                cnpj,
+                locais_cadastrados,
+                formacao_academica
+            `);
 
-            const allUsers = usersWithLocals as UserProfileWithLocals[];
-            const totalUsers = allUsers.length;
+        if (error) throw error;
 
-            let allLocais: { created_at: string; tipo: 'residencia' | 'trabalho'; user_id: string }[] = [];
-            
-            const companyCounts: Record<string, number> = {};
-            const institutionCounts: Record<string, number> = {};
-            let totalResidencias = 0;
-            let totalTrabalho = 0;
+        const allUsers = data || [];
+        const totalUsers = allUsers.length;
 
-            allUsers.forEach(u => {
-                const locais = (u.locais_cadastrados || []) as any[];
-                
-                const companyIdentifier = u.cnpj ? u.cnpj.trim() : 'CNPJ Não Informado';
-                companyCounts[companyIdentifier] = (companyCounts[companyIdentifier] || 0) + 1;
-                
-                const institution = u.superior_instituicao || 'Instituição Não Informada';
-                institutionCounts[institution] = (institutionCounts[institution] || 0) + 1;
+        let allLocais: { created_at: string; tipo: 'residencia' | 'trabalho'; user_id: string }[] = [];
 
-                locais.forEach(local => {
-                    const tipo = local.tipo_local || (local.nome_local.toLowerCase().includes('residencia') ? 'residencia' : 'trabalho');
-                    if (tipo === 'residencia') {
-                        totalResidencias++;
-                    } else if (tipo === 'trabalho') {
-                        totalTrabalho++;
+        const companyCounts: Record<string, number> = {};
+        const institutionCounts: Record<string, number> = {};
+
+        let totalResidencias = 0;
+        let totalTrabalho = 0;
+
+        allUsers.forEach((u: any) => {
+
+            // Empresas
+            const companyIdentifier = u.cnpj ? u.cnpj.trim() : 'CNPJ Não Informado';
+            companyCounts[companyIdentifier] = (companyCounts[companyIdentifier] || 0) + 1;
+
+            // ===== INSTITUIÇÕES (leitura de formacao_academica) =====
+            let formacoes = [];
+            if (u.formacao_academica) {
+                if (typeof u.formacao_academica === 'string') {
+                    try {
+                        formacoes = JSON.parse(u.formacao_academica);
+                    } catch {
+                        formacoes = [];
                     }
-
-                    allLocais.push({
-                        created_at: local.timestamp_cadastro || u.created_at, 
-                        tipo: tipo as 'residencia' | 'trabalho', 
-                        user_id: u.id
-                    });
-                });
-            });
-
-            const totalLocais = allLocais.length;
-            
-            const uniqueInstitutions = Object.keys(institutionCounts).filter(n => n !== 'Instituição Não Informada');
-            const totalInstitutions = uniqueInstitutions.length;
-            
-            const taxaAtividade = totalUsers > 0 ? (totalLocais / totalUsers).toFixed(1) : '0.0';
-            const onlineUsers = 3;
-
-            setKpiData({
-                totalUsers: totalUsers,
-                onlineUsers: onlineUsers,
-                totalLocations: totalLocais,
-                totalResidencias: totalResidencias,
-                totalTrabalho: totalTrabalho,
-                totalInstitutions: totalInstitutions,
-                taxaAtividade: taxaAtividade,
-            });
-
-            const formattedTopInstitutions = uniqueInstitutions
-                .map(name => ({ name: name.substring(0, 30), count: institutionCounts[name] }))
-                .sort((a, b) => b.count - a.count)
-                .slice(0, 5)
-                .map((item, index) => ({...item, color: CHART_COLORS[index % CHART_COLORS.length]}));
-            setTopInstitutions(formattedTopInstitutions);
-
-            const formattedTopCompanies = Object.keys(companyCounts)
-                .filter(cnpj => cnpj !== 'CNPJ Não Informado')
-                .map(cnpj => ({ name: cnpj.substring(0, 8) + '... (CNPJ)', count: companyCounts[cnpj] }))
-                .sort((a, b) => b.count - a.count)
-                .slice(0, 5)
-                .map((item, index) => ({...item, color: CHART_COLORS[index % CHART_COLORS.length]}));
-            setTopCompanies(formattedTopCompanies);
-
-            const months: Record<string, number> = {};
-            const monthLabels: string[] = [];
-            const monthValues: number[] = [];
-            
-            for (let i = 5; i >= 0; i--) {
-                const d = new Date();
-                d.setMonth(d.getMonth() - i);
-                const key = d.toLocaleString('pt-BR', { month: 'short' }).toUpperCase(); 
-                months[key] = 0;
-                if (!monthLabels.includes(key)) monthLabels.push(key);
+                } else if (Array.isArray(u.formacao_academica)) {
+                    formacoes = u.formacao_academica;
+                }
             }
 
-            allLocais.forEach(l => {
-                const date = new Date(l.created_at);
-                const key = date.toLocaleString('pt-BR', { month: 'short' }).toUpperCase();
-                if (months[key] !== undefined) {
-                    months[key]++;
+            formacoes.forEach((f: any) => {
+                if (f.instituicao && f.instituicao.trim()) {
+                    const inst = f.instituicao.trim();
+                    institutionCounts[inst] = (institutionCounts[inst] || 0) + 1;
                 }
             });
 
-            monthLabels.forEach(label => monthValues.push(months[label]));
+            // ===== TRATAMENTO DO JSON =====
+            let locais = [];
 
-            setGrowthData({
-                labels: monthLabels,
-                datasets: [{
-                    data: monthValues.length > 0 ? monthValues : [0],
-                    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
-                    strokeWidth: 2,
-                }],
-                legend: ['Novos Registros']
+            if (u.locais_cadastrados) {
+                // Se vier como string JSON
+                if (typeof u.locais_cadastrados === 'string') {
+                    try {
+                        locais = JSON.parse(u.locais_cadastrados);
+                    } catch {
+                        locais = [];
+                    }
+                }
+                // Se já vier como array (JSONB normal)
+                else if (Array.isArray(u.locais_cadastrados)) {
+                    locais = u.locais_cadastrados;
+                }
+            }
+
+            locais.forEach((local: any) => {
+                const tipo = local.tipo_local;
+
+                if (tipo === 'Residencia') totalResidencias++;
+                if (tipo === 'Trabalho') totalTrabalho++;
+
+                allLocais.push({
+                    created_at: local.timestamp_cadastro || u.created_at,
+                    tipo,
+                    user_id: u.id
+                });
             });
+        });
 
-        } catch (error) {
-            console.error("Erro ao buscar estatísticas:", error);
-            Alert.alert("Erro de API/DB", `Não foi possível carregar os dados. Detalhe: ${error.message}`); 
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
+        const totalLocais = allLocais.length;
+
+        const uniqueInstitutions = Object.keys(institutionCounts)
+            .filter(n => n && n.trim() !== '');
+
+        const totalInstitutions = uniqueInstitutions.length;
+
+        const taxaAtividade =
+            totalUsers > 0 ? (totalLocais / totalUsers).toFixed(1) : '0.0';
+
+        setKpiData({
+            totalUsers,
+            totalLocations: totalLocais,
+            totalResidencias,
+            totalTrabalho,
+            totalInstitutions,
+            taxaAtividade,
+        });
+
+        // ===== TOP INSTITUIÇÕES =====
+        const formattedTopInstitutions = uniqueInstitutions
+            .map(name => ({
+                name: name.substring(0, 30),
+                count: institutionCounts[name],
+                fullName: name
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5)
+            .map((item, index) => ({
+                ...item,
+                id: `inst-${index}-${item.fullName}`,
+                color: CHART_COLORS[index % CHART_COLORS.length]
+            }));
+
+        setTopInstitutions(formattedTopInstitutions);
+
+        // ===== TOP EMPRESAS =====
+        const formattedTopCompanies = Object.keys(companyCounts)
+            .filter(cnpj => cnpj && cnpj.trim() !== '' && cnpj !== 'CNPJ Não Informado')
+            .map(cnpj => ({
+                name: cnpj.substring(0, 8) + '...',
+                count: companyCounts[cnpj],
+                fullCNPJ: cnpj
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5)
+            .map((item, index) => ({
+                ...item,
+                id: `company-${index}-${item.fullCNPJ}`,
+                color: CHART_COLORS[index % CHART_COLORS.length]
+            }));
+
+        setTopCompanies(formattedTopCompanies);
+
+        // ===== CRESCIMENTO (6 meses) =====
+        const months: Record<string, number> = {};
+        const labels: string[] = [];
+        const values: number[] = [];
+
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const key = d.toLocaleString('pt-BR', { month: 'short' }).toUpperCase();
+            months[key] = 0;
+            labels.push(key);
         }
-    }, []);
 
+        allLocais.forEach(l => {
+            const date = new Date(l.created_at);
+            const key = date.toLocaleString('pt-BR', { month: 'short' }).toUpperCase();
+            if (months[key] !== undefined) {
+                months[key]++;
+            }
+        });
+
+        labels.forEach(label => values.push(months[label]));
+
+        setGrowthData({
+            labels,
+            datasets: [{
+                data: values.length > 0 ? values : [0],
+                color: (opacity = 1) => `rgba(59,130,246,${opacity})`,
+                strokeWidth: 2,
+            }],
+            legend: ['Novos Registros']
+        });
+
+    } catch (error: any) {
+        console.error('Erro ao buscar stats:', error);
+        Alert.alert('Erro', error.message);
+    } finally {
+        setLoading(false);
+        setRefreshing(false);
+    }
+}, []);
     useEffect(() => {
         fetchStats();
     }, [fetchStats]);
@@ -209,17 +269,15 @@ export default function StatsScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
             <View style={styles.header}>
-                <Text style={styles.title}>Dashboard de Estatísticas 📈</Text>
+                <Text style={styles.title}>Dashboard de Estatísticas </Text>
                 <Text style={styles.subtitle}>Visão geral da rede de egressos e instituições.</Text>
             </View>
             
             <View style={styles.kpiContainer}>
                 {renderKpiCard('Total Usuários', kpiData.totalUsers, 'users', '#3b82f6')}
-                {renderKpiCard('Usuários Online', kpiData.onlineUsers, 'zap', '#10b981')}
-                
+                {renderKpiCard('Média Locais/Usuário', kpiData.taxaAtividade, 'bar-chart-2', '#10b981')}
                 {renderKpiCard('Locais Residência', kpiData.totalResidencias, 'home', '#8b5cf6')}
                 {renderKpiCard('Locais Empresa', kpiData.totalTrabalho, 'briefcase', '#f97316')}
-                
                 {renderKpiCard('Total de Locais', kpiData.totalLocations, 'map-pin', '#ef4444')}
                 {renderKpiCard('Total Instituições', kpiData.totalInstitutions, 'book-open', '#ec4899')}
             </View>
@@ -248,7 +306,7 @@ export default function StatsScreen() {
                     <FlatList
                         data={topInstitutions}
                         renderItem={renderListItem}
-                        keyExtractor={item => item.name}
+                        keyExtractor={item => item.id}
                         scrollEnabled={false}
                         style={{ width: '100%', paddingHorizontal: 5 }}
                     />
@@ -263,7 +321,7 @@ export default function StatsScreen() {
                     <FlatList
                         data={topCompanies}
                         renderItem={renderListItem}
-                        keyExtractor={item => item.name}
+                        keyExtractor={item => item.id}
                         scrollEnabled={false}
                         style={{ width: '100%', paddingHorizontal: 5 }}
                     />
@@ -278,24 +336,24 @@ export default function StatsScreen() {
 }
 
 const chartConfig = {
-    backgroundGradientFrom: '#ffffff',
-    backgroundGradientTo: '#ffffff',
-    color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(100, 116, 139, ${opacity})`,
-    strokeWidth: 2,
-    barPercentage: 0.5,
-    useShadowColorFromDataset: false,
+    backgroundGradientFrom: '#1e293b', // slate-800
+    backgroundGradientTo: '#1e293b',
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(96, 165, 250, ${opacity})`, // blue-400
+    labelColor: (opacity = 1) => `rgba(203, 213, 225, ${opacity})`, // slate-300
+    style: {
+        borderRadius: 16,
+    },
     propsForDots: {
-        r: "4",
+        r: "5",
         strokeWidth: "2",
-        stroke: "#2563eb"
+        stroke: "#3b82f6"
     }
 };
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8fafc',
+        backgroundColor: '#0f172a', // slate-950 (Fundo principal)
     },
     header: {
         paddingHorizontal: 20,
@@ -305,11 +363,11 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: '#0f172a',
+        color: '#f8fafc', // slate-50
     },
     subtitle: {
         fontSize: 16,
-        color: '#64748b',
+        color: '#94a3b8', // slate-400
         marginTop: 4,
     },
     kpiContainer: {
@@ -319,67 +377,66 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     kpiCard: {
-        backgroundColor: '#ffffff',
+        backgroundColor: '#1e293b', // slate-800
         width: '48%',
         padding: 15,
         borderRadius: 12,
         marginBottom: 10,
+        // Sombras mais sutis para o dark mode
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 2,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
         alignItems: 'flex-start',
+        borderWidth: 1,
+        borderColor: '#334155', // slate-700
     },
     kpiValue: {
         fontSize: 20, 
         fontWeight: 'bold',
-        color: '#0f172a',
+        color: '#f1f5f9', // slate-100
         marginTop: 5,
     },
     kpiTitle: {
         fontSize: 12, 
-        color: '#64748b',
+        color: '#94a3b8', // slate-400
         marginTop: 2,
         textAlign: 'left'
     },
     chartCard: {
-        backgroundColor: '#ffffff',
+        backgroundColor: '#1e293b', // slate-800
         borderRadius: 12,
         marginHorizontal: 20,
         marginBottom: 20,
         padding: 15,
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
-        elevation: 2,
+        borderWidth: 1,
+        borderColor: '#334155',
     },
     cardTitle: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: '#0f172a',
+        color: '#f1f5f9',
         alignSelf: 'flex-start',
-        marginBottom: 10,
+        marginBottom: 15,
     },
     listItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 10,
+        paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f1f5f9',
+        borderBottomColor: '#334155', // slate-700
         width: '100%',
     },
     listItemText: {
         fontSize: 14,
-        color: '#334155',
-        flex: 1,
+        color: '#cbd5e1', // slate-300
     },
     listItemValue: {
         fontSize: 14,
         fontWeight: '600',
-        color: '#0f172a',
+        color: '#f8fafc',
     }
 });

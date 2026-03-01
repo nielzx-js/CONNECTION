@@ -7,7 +7,7 @@ import { supabase } from '../config/supabase';
 import { Feather } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { geocodeCEP, LocalCadastrado } from '../utils/geocoding'; 
+import { geocodeCEP, LocalCadastrado } from '../utils/geocoding';
 
 const { width } = Dimensions.get('window');
 
@@ -22,686 +22,376 @@ interface UserProfile {
     email?: string;
     cpf?: string;
     data_nascimento?: string;
-    telefone?: string; 
+    telefone?: string;
     linkedin?: string;
-    cep_residencia?: string; 
-    pais_residencia?: string; 
-    uf_residencia?: string; 
-    cidade_residencia?: string; 
-    cep_trabalho?: string; 
-    cnpj?: string; 
-    atuacao?: string; 
-    tipo_trabalho?: 'PRESENCIAL' | 'ONLINE' | 'HIBRIDO' | ''; 
+    cep_residencia?: string;
+    pais_residencia?: string;
+    uf_residencia?: string;
+    cidade_residencia?: string;
+    cep_trabalho?: string;
+    cnpj?: string;
+    atuacao?: string;
+    tipo_trabalho?: 'PRESENCIAL' | 'ONLINE' | 'HIBRIDO' | 'DESEMPREGADO' | '';
     empresa?: string;
     cargo?: string;
     tempo_empresa?: string;
-    conta_verificada?: boolean; 
-    locais_cadastrados?: LocalCadastrado[]; 
+    conta_verificada?: boolean;
+    locais_cadastrados?: LocalCadastrado[];
 }
 
-const FORMACAO_TITLES = [
-    'Ensino Médio/Técnico', 
-    'Graduação/Tecnólogo', 
-    'Especialização', 
-    'MBA', 
-    'Mestrado', 
-    'Doutorado'
-];
-
+const FORMACAO_TITLES = ['Ensino Médio/Técnico', 'Graduação/Tecnólogo', 'Especialização', 'MBA', 'Mestrado', 'Doutorado'];
 const TIPOS_TRABALHO = [
     { label: "Presencial", value: 'PRESENCIAL' },
     { label: "Online", value: 'ONLINE' },
     { label: "Híbrido", value: 'HIBRIDO' },
+    { label: "Desempregado", value: 'DESEMPREGADO' },
 ];
+const CURSOS_FIXOS = ['Química', 'Informática', 'Estradas', 'Edificações', 'Mecânica'];
 
-const CURSOS_FIXOS = [
-    'Química',
-    'Informática',
-    'Estradas',
-    'Edificações',
-    'Mecânica',
-];
-
-const maskCPF = (value: string): string => {
-    if (!value) return '';
-    value = value.replace(/\D/g, '');
-    value = value.replace(/^(\d{3})(\d)/, '$1.$2');
-    value = value.replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3');
-    value = value.replace(/\.(\d{3})(\d)/, '.$1-$2');
-    return value.substring(0, 14); 
+const maskCPF = (v: string) => v.replace(/\D/g, '').replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1-$2').substring(0, 14);
+const maskCNPJ = (v: string) => v.replace(/\D/g, '').replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d)/, '$1-$2').substring(0, 18);
+const maskPhone = (v: string) => {
+    v = v.replace(/\D/g, '').substring(0, 11);
+    if (v.length > 6) return v.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+    if (v.length > 2) return v.replace(/^(\d{2})(\d+)/, '($1) $2');
+    return v.length > 0 ? '(' + v : '';
 };
 
-const maskCNPJ = (value: string): string => {
-    if (!value) return '';
-    value = value.replace(/\D/g, '');
-    value = value.replace(/^(\d{2})(\d)/, '$1.$2');
-    value = value.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
-    value = value.replace(/(\d{3})(\d)/, '$1/$2');
-    value = value.replace(/(\d{4})(\d)/, '$1-$2');
-    return value.substring(0, 18);
+const validateCPF = (cpf: string) => {
+    const c = cpf.replace(/[^\d]/g, '');
+    if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+    let s = 0, r;
+    for (let i = 1; i <= 9; i++) s += parseInt(c.substring(i - 1, i)) * (11 - i);
+    r = (s * 10) % 11;
+    if (r === 10 || r === 11) r = 0;
+    if (r !== parseInt(c.substring(9, 10))) return false;
+    s = 0;
+    for (let i = 1; i <= 10; i++) s += parseInt(c.substring(i - 1, i)) * (12 - i);
+    r = (s * 10) % 11;
+    if (r === 10 || r === 11) r = 0;
+    return r === parseInt(c.substring(10, 11));
 };
 
-const maskPhone = (value: string): string => {
-    if (!value) return '';
-    value = value.replace(/\D/g, ''); 
-    value = value.substring(0, 11);
-
-    if (value.length > 6) {
-        value = value.replace(/^(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-    } else if (value.length > 2) {
-        value = value.replace(/^(\d{2})(\d+)/, '($1) $2');
-    } else if (value.length > 0) {
-           value = value.replace(/^(\d*)/, '($1');
-    }
-    
-    return value;
-};
-
-const validateCPF = (cpf: string): boolean => {
-    const cleanCPF = cpf.replace(/[^\d]/g, '');
-    if (cleanCPF.length !== 11 || /^(\d)\1{10}$/.test(cleanCPF)) return false;
-    let sum = 0;
-    let remainder;
-    for (let i = 1; i <= 9; i++) sum += parseInt(cleanCPF.substring(i - 1, i)) * (11 - i);
-    remainder = (sum * 10) % 11;
-    if ((remainder === 10) || (remainder === 11)) remainder = 0;
-    if (remainder !== parseInt(cleanCPF.substring(9, 10))) return false;
-    sum = 0;
-    for (let i = 1; i <= 10; i++) sum += parseInt(cleanCPF.substring(i - 1, i)) * (12 - i);
-    remainder = (sum * 10) % 11;
-    if ((remainder === 10) || (remainder === 11)) remainder = 0;
-    if (remainder !== parseInt(cleanCPF.substring(10, 11))) return false;
-    return true;
-};
-
-const LocalResidenciaTab = ({ profile, handleChange }: { profile: Partial<UserProfile>, handleChange: (key: keyof UserProfile, value: string) => void }) => (
-    <View style={localStyles.tabContent}>
-        <Text style={styles.label}>CEP Onde Mora </Text>
-        <TextInput
-            style={styles.input}
-            value={profile.cep_residencia || ""}
-            onChangeText={(v) => handleChange("cep_residencia", v)}
-            placeholder="Ex: 57000-000"
-            keyboardType="numeric"
-            autoCorrect={false}
-        />
-        
+const LocalResidenciaTab = ({ profile, handleCEPChange }: any) => (
+    <View style={localStyles.tabContentBox}>
+        <Text style={styles.label}>CEP Onde Mora</Text>
+        <TextInput style={styles.input} value={profile.cep_residencia || ""} keyboardType="numeric" maxLength={8} onChangeText={handleCEPChange} placeholder="Digite o CEP" />
         <Text style={styles.label}>País</Text>
-        <TextInput
-            style={styles.input}
-            value={profile.pais_residencia || ""}
-            onChangeText={(v) => handleChange("pais_residencia", v)}
-            placeholder="Ex: Brasil"
-        />
-        
-        <Text style={styles.label}>UF (Estado)</Text>
-        <TextInput
-            style={styles.input}
-            value={profile.uf_residencia || ""}
-            onChangeText={(v) => handleChange("uf_residencia", v.toUpperCase())}
-            placeholder="Ex: AL"
-            maxLength={2}
-        />
-
-        <Text style={styles.label}>Cidade onde mora</Text>
-        <TextInput
-            style={styles.input}
-            value={profile.cidade_residencia || ""}
-            onChangeText={(v) => handleChange("cidade_residencia", v)}
-            placeholder="Ex: Maceió"
-        />
+        <TextInput style={[styles.input, { backgroundColor: "#1e293b" }]} value={profile.pais_residencia || ""} editable={false} />
+        <Text style={styles.label}>UF</Text>
+        <TextInput style={[styles.input, { backgroundColor: "#1e293b" }]} value={profile.uf_residencia || ""} editable={false} />
+        <Text style={styles.label}>Cidade</Text>
+        <TextInput style={[styles.input, { backgroundColor: "#1e293b" }]} value={profile.cidade_residencia || ""} editable={false} />
     </View>
 );
 
-const LocalTrabalhoTab = ({ profile, handleChange, activeTab }: { profile: Partial<UserProfile>, handleChange: (key: keyof UserProfile, value: string) => void, activeTab: 'residencia' | 'trabalho' }) => (
-    <View style={localStyles.tabContent}>
-        <Text style={styles.label}>CEP Onde Trabalha </Text>
-        <TextInput
-            style={styles.input}
-            value={profile.cep_trabalho || ""}
-            onChangeText={(v) => handleChange("cep_trabalho", v)}
-            placeholder="Ex: 57000-000"
-            keyboardType="numeric"
-            autoCorrect={false}
-        />
-
-        <Text style={styles.label}>CNPJ da Empresa</Text>
-        <TextInput
-            style={styles.input}
-            value={maskCNPJ(profile.cnpj || "")}
-            onChangeText={(v) => handleChange("cnpj", v)}
-            placeholder="00.000.000/0000-00"
-            keyboardType="numeric"
-            autoCorrect={false}
-        />
-        
-        <Text style={styles.label}>Atua Como/Trabalha Como</Text>
-        <TextInput
-            style={styles.input}
-            value={profile.atuacao || ""}
-            onChangeText={(v) => handleChange("atuacao", v)}
-            placeholder="Ex: Computação, Autônomo, Gerente..."
-        />
-        
-        <Text style={styles.label}>Tipo de Trabalho</Text>
-        <View style={localStyles.selectContainer}>
-            {TIPOS_TRABALHO.map((item) => (
-                <TouchableOpacity
-                    key={item.value}
-                    style={[localStyles.selectOption, profile.tipo_trabalho === item.value && localStyles.selectOptionActive]}
-                    onPress={() => handleChange('tipo_trabalho', item.value)}
-                >
-                    <Text style={profile.tipo_trabalho === item.value ? localStyles.selectTextActive : localStyles.selectText}>
-                        {item.label}
-                    </Text>
-                </TouchableOpacity>
-            ))}
+const LocalTrabalhoTab = ({ profile, handleChange }: any) => {
+    const isUnemployed = profile.tipo_trabalho === 'DESEMPREGADO';
+    return (
+        <View style={localStyles.tabContentBox}>
+            <Text style={styles.label}>CEP Onde Trabalha</Text>
+            <TextInput 
+                style={[styles.input, isUnemployed && { opacity: 0.5 }]} 
+                value={profile.cep_trabalho || ""} 
+                onChangeText={(v) => handleChange("cep_trabalho", v)} 
+                placeholder="Ex: 57000-000" 
+                keyboardType="numeric" 
+                editable={!isUnemployed}
+            />
+            <Text style={styles.label}>CNPJ da Empresa</Text>
+            <TextInput 
+                style={[styles.input, isUnemployed && { opacity: 0.5 }]} 
+                value={maskCNPJ(profile.cnpj || "")} 
+                onChangeText={(v) => handleChange("cnpj", v)} 
+                placeholder="00.000.000/0000-00" 
+                keyboardType="numeric" 
+                editable={!isUnemployed}
+            />
+            <Text style={styles.label}>Tipo de Trabalho</Text>
+            <View style={localStyles.selectContainer}>
+                {TIPOS_TRABALHO.map((item) => (
+                    <TouchableOpacity key={item.value} style={[localStyles.selectOption, profile.tipo_trabalho === item.value && localStyles.selectOptionActive]} onPress={() => handleChange('tipo_trabalho', item.value)}>
+                        <Text style={profile.tipo_trabalho === item.value ? localStyles.selectTextActive : localStyles.selectText}>{item.label}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+            <Text style={styles.label}>Atua Como / Trabalha Como</Text>
+            <TextInput style={[styles.input, isUnemployed && { opacity: 0.5 }]} value={profile.atuacao || ""} onChangeText={(v) => handleChange("atuacao", v)} placeholder="Ex: Computação, Autônomo, Gerente..." editable={!isUnemployed} />
+            <Text style={styles.label}>Nome da Empresa</Text>
+            <TextInput style={[styles.input, isUnemployed && { opacity: 0.5 }]} value={profile.empresa || ""} onChangeText={(v) => handleChange("empresa", v)} placeholder="Nome da empresa" editable={!isUnemployed} />
+            <Text style={styles.label}>Cargo</Text>
+            <TextInput style={[styles.input, isUnemployed && { opacity: 0.5 }]} value={profile.cargo || ""} onChangeText={(v) => handleChange("cargo", v)} placeholder="Seu cargo na empresa" editable={!isUnemployed} />
+            <Text style={styles.label}>Tempo de Atuação na Empresa</Text>
+            <TextInput style={[styles.input, isUnemployed && { opacity: 0.5 }]} value={profile.tempo_empresa || ""} onChangeText={(v) => handleChange("tempo_empresa", v)} placeholder="Ex: 2 anos e 6 meses" editable={!isUnemployed} />
         </View>
-
-        <Text style={styles.label}>Nome da Empresa</Text>
-        <TextInput
-            style={styles.input}
-            value={profile.empresa || ""}
-            onChangeText={(v) => handleChange("empresa", v)}
-            placeholder="Nome da empresa"
-        />
-
-        <Text style={styles.label}>Cargo (Ex: Desenvolvedor Mobile)</Text>
-        <TextInput
-            style={styles.input}
-            value={profile.cargo || ""}
-            onChangeText={(v) => handleChange("cargo", v)}
-            placeholder="Seu cargo na empresa"
-        />
-
-        <Text style={styles.label}>Tempo de Atuação na Empresa</Text>
-        <TextInput
-            style={styles.input}
-            value={profile.tempo_empresa || ""}
-            onChangeText={(v) => handleChange("tempo_empresa", v)}
-            placeholder="Ex: 2 anos e 6 meses"
-        />
-    </View>
-);
+    );
+};
 
 export default function SettingsScreen() {
     const insets = useSafeAreaInsets();
-    
     const [profile, setProfile] = useState<Partial<UserProfile>>({});
     const [formacoes, setFormacoes] = useState<FormacaoItem[]>(Array(6).fill({ instituicao: '', periodo: '', curso: '' }));
-    const [loading, setLoading] = useState<boolean>(true);
-    const [saving, setSaving] = useState<boolean>(false);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [date, setDate] = useState(new Date());
     const [activeTab, setActiveTab] = useState<'residencia' | 'trabalho'>('residencia');
     const [isCourseModalVisible, setIsCourseModalVisible] = useState(false);
     const [currentFormacaoIndex, setCurrentFormacaoIndex] = useState<number | null>(null);
-    
-    const handleChange = useCallback((key: keyof UserProfile, value: string) => {
-        let finalValue = value;
-        
-        if (key === 'cpf') finalValue = maskCPF(value);
-        if (key === 'cnpj') finalValue = maskCNPJ(value);
-        if (key === 'telefone') finalValue = maskPhone(value);
-        
-        setProfile(prev => ({ ...prev, [key]: finalValue }));
-    }, []); 
 
-    const handleFormacaoChange = useCallback((index: number, key: keyof FormacaoItem, value: string) => {
+    const handleCEPChange = async (v: string) => {
+        const clean = v.replace(/\D/g, '');
+        setProfile(p => ({ ...p, cep_residencia: clean }));
+        if (clean.length === 8) {
+            const res = await geocodeCEP(clean, 'Residencia');
+            if (res) setProfile(p => ({ ...p, pais_residencia: res.pais, uf_residencia: res.uf, cidade_residencia: res.municipio }));
+        }
+    };
+
+    const handleChange = useCallback((key: keyof UserProfile, value: string) => {
+        let final = value;
+        if (key === 'cpf') final = maskCPF(value);
+        if (key === 'cnpj') final = maskCNPJ(value);
+        if (key === 'telefone') final = maskPhone(value);
+        if (key === 'tipo_trabalho' && value === 'DESEMPREGADO') {
+            setProfile(prev => ({ ...prev, [key]: value, cep_trabalho: '', cnpj: '', atuacao: '', empresa: '', cargo: '', tempo_empresa: '' }));
+            return;
+        }
+        setProfile(prev => ({ ...prev, [key]: final }));
+    }, []);
+
+    const handleFormacaoChange = (index: number, key: keyof FormacaoItem, value: string) => {
         setFormacoes(prev => {
-            const copy = prev.slice();
+            const copy = [...prev];
             copy[index] = { ...copy[index], [key]: value };
             return copy;
         });
-    }, []);
-    
-    const onDateChange = (event: any, selectedDate?: Date) => {
-        setShowDatePicker(false);
-        if (selectedDate) {
-            setDate(selectedDate);
-            handleChange('data_nascimento', selectedDate.toLocaleDateString('pt-BR')); 
-        }
-    };
-    
-    const openCourseModal = (index: number) => {
-        setCurrentFormacaoIndex(index);
-        setIsCourseModalVisible(true);
     };
 
-    const selectFixedCourse = (course: string) => {
-        if (currentFormacaoIndex !== null) {
-            handleFormacaoChange(currentFormacaoIndex, 'curso', course);
+    const onDateChange = (event: any, selected?: Date) => {
+        setShowDatePicker(false);
+        if (selected) {
+            setDate(selected);
+            handleChange('data_nascimento', selected.toLocaleDateString('pt-BR'));
         }
-        setIsCourseModalVisible(false);
-        setCurrentFormacaoIndex(null);
     };
 
     const loadProfile = async () => {
         setLoading(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("Usuário não encontrado.");
-
-            const { data, error } = await supabase
-                .from('usuarios')
-                .select('*')
-                .eq('id', user.id)
-                .single();
-
+            if (!user) return;
+            const { data, error } = await supabase.from('usuarios').select('*').eq('id', user.id).single();
             if (error && (error as any).code !== 'PGRST116') throw error;
-
-            const initialProfile: Partial<UserProfile> & { formacao_academica?: FormacaoItem[] } = {
-                email: user.email || '',
-                full_name: data?.full_name || user.user_metadata?.full_name || '',
-                ...(data || {})
-            };
-            
-            initialProfile.conta_verificada = data?.conta_verificada ?? false; 
-
-            if (initialProfile.cpf) initialProfile.cpf = maskCPF(String(initialProfile.cpf));
-            if (initialProfile.cnpj) initialProfile.cnpj = maskCNPJ(String(initialProfile.cnpj));
-            if (initialProfile.telefone) initialProfile.telefone = maskPhone(String(initialProfile.telefone));
-
-            if (initialProfile.data_nascimento) {
-                const parts = String(initialProfile.data_nascimento).split('/');
+            const initial: any = { email: user.email || '', full_name: data?.full_name || user.user_metadata?.full_name || '', ...(data || {}) };
+            if (initial.cpf) initial.cpf = maskCPF(String(initial.cpf));
+            if (initial.cnpj) initial.cnpj = maskCNPJ(String(initial.cnpj));
+            if (initial.telefone) initial.telefone = maskPhone(String(initial.telefone));
+            if (initial.data_nascimento) {
+                const parts = String(initial.data_nascimento).split('/');
                 if (parts.length === 3) {
                     const parsed = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
                     if (!isNaN(parsed.getTime())) setDate(parsed);
                 }
             }
-
-            const DADOS_DO_BANCO: FormacaoItem[] = (data?.formacao_academica && Array.isArray(data.formacao_academica))
-                ? data.formacao_academica as FormacaoItem[] : [];
-            
-            const filledFormations = Array(6).fill(null).map((_, i) => 
-                DADOS_DO_BANCO[i] || { instituicao: '', periodo: '', curso: '' }
-            );
-            setFormacoes(filledFormations);
-
-            delete (initialProfile as any).formacao_academica;
-
-            setProfile(initialProfile);
-        } catch (error) {
-            console.error("Erro ao carregar perfil:", error);
-            Alert.alert("Erro", "Não foi possível carregar seus dados.");
+            const dbForm: any[] = (data?.formacao_academica && Array.isArray(data.formacao_academica)) ? data.formacao_academica : [];
+            setFormacoes(Array(6).fill(null).map((_, i) => dbForm[i] || { instituicao: '', periodo: '', curso: '' }));
+            setProfile(initial);
+        } catch (e) {
+            Alert.alert("Erro", "Falha ao carregar perfil.");
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        loadProfile();
-    }, []);
+    useEffect(() => { loadProfile(); }, []);
 
     const handleSave = async () => {
-        const cleanCPF = profile.cpf ? profile.cpf.replace(/\D/g, '') : '';
-        if (!cleanCPF || !validateCPF(cleanCPF)) {
-            Alert.alert("Erro de Validação", "CPF inválido. Por favor, verifique.");
-            return;
+    const cleanCPF = profile.cpf?.replace(/\D/g, '') || '';
+    if (!cleanCPF || !validateCPF(cleanCPF)) return Alert.alert("Erro", "CPF inválido.");
+    const cleanCNPJ = profile.cnpj?.replace(/\D/g, '') || '';
+    if (profile.tipo_trabalho !== 'DESEMPREGADO' && cleanCNPJ && cleanCNPJ.length !== 14) return Alert.alert("Erro", "CNPJ inválido.");
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    setSaving(true);
+    try {
+        const formToSave = formacoes.filter(f => (f.instituicao || f.curso || f.periodo) && (f.instituicao.trim() || f.curso.trim() || f.periodo.trim()));
+        const isUnemployed = profile.tipo_trabalho === 'DESEMPREGADO';
+
+        // Validações detalhadas e mensagem ao usuário
+        const missing: string[] = [];
+        if (!profile.full_name || !profile.full_name.trim()) missing.push('Nome completo');
+        if (!cleanCPF) missing.push('CPF válido');
+        if (!profile.data_nascimento) missing.push('Data de nascimento');
+        if (!profile.telefone || !profile.telefone.trim()) missing.push('Telefone');
+
+        const cepClean = profile.cep_residencia?.replace(/\D/g, '') || '';
+        if (!(cepClean.length === 8 && profile.pais_residencia && profile.uf_residencia && profile.uf_residencia.length === 2 && profile.cidade_residencia)) missing.push('Endereço de residência completo (CEP, país, UF, cidade)');
+
+        if (!profile.tipo_trabalho) missing.push('Tipo de trabalho (escolha uma opção)');
+        else if (!isUnemployed) {
+            if (!profile.empresa || !profile.empresa.trim() || !profile.cargo || !profile.cargo.trim()) missing.push('Dados de trabalho completos (empresa e cargo)');
         }
-        
-        const cleanCNPJ = profile.cnpj ? profile.cnpj.replace(/\D/g, '') : '';
-        if (cleanCNPJ && cleanCNPJ.length !== 14) {
-            Alert.alert("Erro de Validação", "CNPJ deve ter 14 dígitos. Por favor, verifique.");
-            return;
-        }
 
-        const { data: authData } = await supabase.auth.getUser();
-        const user = authData.user;
-        if (!user) return Alert.alert("Erro", "Usuário não encontrado. Tente logar novamente.");
+        // Requer pelo menos a formação mínima (ensino médio/técnico) na posição 0
+        const hasMinFormation = (formacoes[0] && (formacoes[0].instituicao?.trim() || formacoes[0].curso?.trim() || formacoes[0].periodo?.trim()));
+        if (!hasMinFormation) missing.push('Ao menos uma formação: Ensino Médio/Técnico');
 
-        setSaving(true);
-        
-        try {
-            const cleanPhone = profile.telefone ? profile.telefone.replace(/\D/g, '') : '';
-            const formattedDate = date.toLocaleDateString('pt-BR');
-
-            const formacoesToSave = formacoes.filter(f => 
-                f.instituicao.trim() !== '' || f.curso.trim() !== '' || f.periodo.trim() !== ''
-            );
-
-            let isVerified = profile.conta_verificada ?? false;
-
-            if (!isVerified) {
-                const hasPersonalInfo = 
-                    (profile.full_name?.trim() ?? '') !== '' &&
-                    (cleanCPF !== '') &&
-                    (profile.data_nascimento?.trim() ?? '') !== '' &&
-                    (cleanPhone !== '');
-
-                const hasResidenceInfo = 
-                    (profile.cep_residencia?.replace(/\D/g, '').length === 8) &&
-                    (profile.pais_residencia?.trim() ?? '') !== '' &&
-                    (profile.uf_residencia?.trim() ?? '').length === 2 &&
-                    (profile.cidade_residencia?.trim() ?? '') !== '';
-                
-                const hasOneFormation = formacoesToSave.length > 0;
-
-                if (hasPersonalInfo && hasResidenceInfo && hasOneFormation) {
-                    isVerified = true;
-                    Alert.alert("Parabéns!", "Sua conta foi verificada com sucesso!");
-                }
-            }
-
-            const locaisCadastrados: LocalCadastrado[] = [];
-            
-            if (profile.cep_residencia && profile.cep_residencia.replace(/\D/g, '').length === 8) {
-                const localResidencia = await geocodeCEP(profile.cep_residencia, 'Residencia');
-                if (localResidencia) {
-                    locaisCadastrados.push(localResidencia);
-                } else {
-                    Alert.alert("Aviso", "Não foi possível geocodificar o CEP de Residência. O marcador de Casa não aparecerá no mapa. Verifique o CEP.");
-                }
-            }
-
-            if (profile.cep_trabalho && profile.cep_trabalho.replace(/\D/g, '').length === 8) {
-                const localTrabalho = await geocodeCEP(profile.cep_trabalho, 'Trabalho');
-                if (localTrabalho) {
-                    locaisCadastrados.push(localTrabalho);
-                } else {
-                    Alert.alert("Aviso", "Não foi possível geocodificar o CEP de Trabalho. O marcador de Trabalho não aparecerá no mapa. Verifique o CEP.");
-                }
-            }
-
-            const payload = {
-                id: user.id,
-                full_name: profile.full_name || '',
-                email: profile.email || user.email,
-                cpf: cleanCPF,
-                data_nascimento: formattedDate,
-                telefone: cleanPhone,
-                linkedin: profile.linkedin || '',
-                cep_residencia: profile.cep_residencia ? profile.cep_residencia.replace(/\D/g, '') : '',
-                pais_residencia: profile.pais_residencia || '',
-                uf_residencia: profile.uf_residencia || '',
-                cidade_residencia: profile.cidade_residencia || '',
-                cep_trabalho: profile.cep_trabalho ? profile.cep_trabalho.replace(/\D/g, '') : '',
-                cnpj: cleanCNPJ,
-                atuacao: profile.atuacao || '',
-                tipo_trabalho: profile.tipo_trabalho || '',
-                empresa: profile.empresa || '',
-                cargo: profile.cargo || '',
-                tempo_empresa: profile.tempo_empresa || '',
-                conta_verificada: isVerified,
-                formacao_academica: formacoesToSave,
-                locais_cadastrados: locaisCadastrados, 
-            };
-
-            const { error } = await supabase.from("usuarios").upsert(payload as any);
-
-            if (error) {
-                console.error("Erro ao salvar:", error);
-                Alert.alert("Erro", "Não foi possível salvar seus dados. Tente novamente.");
-                return;
-            }
-
-            Alert.alert("Sucesso", "Dados salvos com sucesso!");
-            await loadProfile();
-
-        } catch (err) {
-            console.error("Erro inesperado durante salvamento:", err);
-            Alert.alert("Erro", "Ocorreu um erro inesperado ao salvar.");
-        } finally {
+        if (missing.length > 0) {
+            Alert.alert('Faltando informações', 'Preencha os campos obrigatórios:\n\n' + missing.join('\n'));
             setSaving(false);
+            return;
         }
-    };
-    
-    const handleSignOut = async () => {
-        Alert.alert(
-            "Sair da Conta",
-            "Tem certeza que deseja deslogar do sistema?",
-            [
-                {
-                    text: "Cancelar",
-                    style: "cancel"
-                },
-                {
-                    text: "Sair",
-                    onPress: async () => {
-                        try {
-                            const { error } = await supabase.auth.signOut();
-                            if (error) {
-                                throw error;
-                            }
-                        } catch (error) {
-                            console.error("Erro ao deslogar:", error);
-                            Alert.alert("Erro ao Sair", "Não foi possível deslogar. Verifique sua conexão.");
-                        }
-                    },
-                    style: "destructive"
-                }
-            ]
-        );
-    };
-    
-    const CourseSelectionModal = () => (
-        <Modal
-            animationType="fade"
-            transparent={true}
-            visible={isCourseModalVisible}
-            onRequestClose={() => setIsCourseModalVisible(false)}
-        >
-            <TouchableWithoutFeedback onPress={() => setIsCourseModalVisible(false)}>
-                <View style={localStyles.modalOverlay}>
-                    <TouchableWithoutFeedback onPress={() => {}}>
-                        <View style={localStyles.modalContent}>
-                            <Text style={localStyles.modalTitle}>Selecione um dos Cursos Fixos</Text>
-                            
-                            <ScrollView style={{ maxHeight: 300 }}>
-                                {CURSOS_FIXOS.map((curso) => (
-                                    <TouchableOpacity
-                                        key={curso}
-                                        style={localStyles.modalOption}
-                                        onPress={() => selectFixedCourse(curso)}
-                                    >
-                                        <Text style={localStyles.modalOptionText}>{curso}</Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </ScrollView>
-                            
-                            <TouchableOpacity
-                                style={localStyles.modalCloseButton}
-                                onPress={() => setIsCourseModalVisible(false)}
-                            >
-                                <Text style={localStyles.modalCloseButtonText}>Fechar</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </TouchableWithoutFeedback>
-                </View>
-            </TouchableWithoutFeedback>
-        </Modal>
-    );
 
-    if (loading) {
-        return (
-            <View style={styles.loadingView}>
-                <ActivityIndicator size="large" color="#2563eb" />
-                <Text style={{ marginTop: 10, color: '#4b5563' }}>Carregando seu perfil...</Text>
-            </View>
-        );
+        const isVerified = true; // todos os requisitos preenchidos
+        if (isVerified && !profile.conta_verificada) Alert.alert("Parabéns!", "Conta verificada!");
+
+        const locais: any[] = [];
+        const resLoc = await geocodeCEP(profile.cep_residencia!, 'Residencia');
+        if (resLoc) locais.push(resLoc);
+        if (!isUnemployed && profile.cep_trabalho?.replace(/\D/g, '').length === 8) {
+            const jobLoc = await geocodeCEP(profile.cep_trabalho, 'Trabalho');
+            if (jobLoc) locais.push(jobLoc);
+        }
+
+        const payload = {
+            ...profile,
+            id: user.id,
+            cpf: cleanCPF,
+            data_nascimento: date.toLocaleDateString('pt-BR'),
+            telefone: profile.telefone?.replace(/\D/g, ''),
+            cep_residencia: profile.cep_residencia?.replace(/\D/g, ''),
+            cep_trabalho: isUnemployed ? (profile.cep_trabalho ? profile.cep_trabalho.replace(/\D/g, '') : '') : (profile.cep_trabalho?.replace(/\D/g, '')),
+            cnpj: isUnemployed ? '' : cleanCNPJ,
+            conta_verificada: isVerified,
+            formacao_academica: formToSave,
+            locais_cadastrados: locais
+        };
+
+        const { error } = await supabase.from("usuarios").upsert(payload);
+        if (error) throw error;
+        Alert.alert("Sucesso", "Dados salvos!");
+        loadProfile();
+    } catch (err) {
+        console.error(err);
+        Alert.alert("Erro", "Falha ao salvar.");
+    } finally {
+        setSaving(false);
     }
+};
+
+    const handleDeleteAccount = () => {
+        Alert.alert("Excluir Conta", "Isso apagará todos os seus dados permanentemente. Confirmar?", [
+            { text: "Cancelar", style: "cancel" },
+            { text: "Excluir", style: "destructive", onPress: async () => {
+                setSaving(true);
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    await supabase.from('usuarios').delete().eq('id', user.id);
+                    await supabase.auth.signOut();
+                }
+                setSaving(false);
+            }}
+        ]);
+    };
+
+    if (loading) return <View style={styles.loadingView}><ActivityIndicator size="large" color="#2563eb" /></View>;
 
     return (
-        <ScrollView style={[styles.container, { paddingBottom: insets.bottom + 20 }]}>
+        <ScrollView style={[styles.container, { paddingBottom: insets.bottom + 140 }]}>
             <Text style={styles.title}>Configurações de Perfil</Text>
-
-            <Text style={localStyles.sectionHeader}>Informações Pessoais</Text>
             <View style={localStyles.sectionBox}>
                 <Text style={styles.label}>Nome completo</Text>
-                <TextInput
-                    style={styles.input}
-                    value={profile.full_name || ""}
-                    onChangeText={(v) => handleChange("full_name", v)}
-                    placeholder="Seu nome completo"
-                />
-                
-                <Text style={styles.label}>Status da Conta</Text>
-                <View style={[localStyles.statusBox, { 
-                    backgroundColor: profile.conta_verificada ? '#f0fdf4' : '#f0f9ff', 
-                    borderColor: profile.conta_verificada ? '#4ade80' : '#bae6fd' 
-                }]}>
-                    <Text style={[localStyles.statusText, { color: profile.conta_verificada ? '#16a34a' : '#0369a1' }]}>
-                        Conta: {profile.conta_verificada ? 'Verificada ' : 'Não Verificada '}
-                    </Text>
+                <TextInput style={styles.input} value={profile.full_name || ""} onChangeText={v => handleChange("full_name", v)} />
+                <View style={[localStyles.statusBox, { backgroundColor: profile.conta_verificada ? '#052e16' : '#1e293b', borderColor: profile.conta_verificada ? '#22c55e' : '#f59e0b' }]}>
+                    <Text style={[localStyles.statusText, { color: profile.conta_verificada ? '#22c55e' : '#f59e0b' }]}>{profile.conta_verificada ? '✅ Verificada' : '⚠️ Não Verificada'}</Text>
                     {!profile.conta_verificada && (
-                        <Text style={localStyles.verificationHint}>
-                            Preencha todas as informações pessoais, residência e pelo menos 1 formação para verificar a conta.
-                        </Text>
+                        <View style={{ marginTop: 8 }}>
+                            <Text style={localStyles.verificationHint}>Para que sua conta seja VERIFICADA, preencha obrigatoriamente:</Text>
+                            <Text style={localStyles.verificationHint}>• Todas as informações pessoais: nome, CPF, data de nascimento e telefone.</Text>
+                            <Text style={localStyles.verificationHint}>• Endereço de residência (CEP, país, UF, cidade) e dados de trabalho — mesmo que esteja desempregado, selecione "Desempregado" e preencha o que for aplicável.</Text>
+                            <Text style={localStyles.verificationHint}>• Ao menos uma formação acadêmica (mínimo: Ensino Médio/Técnico).</Text>
+                        </View>
                     )}
                 </View>
-
                 <Text style={styles.label}>CPF</Text>
-                <TextInput
-                    style={styles.input}
-                    value={maskCPF(profile.cpf || "")}
-                    onChangeText={(v) => handleChange("cpf", v)}
-                    placeholder="000.000.000-00"
-                    keyboardType="numeric"
-                />
-
+                <TextInput style={styles.input} value={profile.cpf} onChangeText={v => handleChange("cpf", v)} keyboardType="numeric" />
                 <Text style={styles.label}>Data de Nascimento</Text>
-                <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.input}>
-                    <Text style={profile.data_nascimento ? localStyles.dateTextFilled : localStyles.dateTextPlaceholder}>
-                        {profile.data_nascimento || "Selecionar data de nascimento"}
-                    </Text>
-                </TouchableOpacity>
-
-                {showDatePicker && (
-                    <DateTimePicker
-                        value={date}
-                        display="default"
-                        mode="date"
-                        onChange={onDateChange}
-                    />
-                )}
-                
-                <Text style={styles.label}>Número de Telefone</Text>
-                <TextInput
-                    style={styles.input}
-                    value={maskPhone(profile.telefone || "")}
-                    onChangeText={(v) => handleChange("telefone", v)}
-                    placeholder="(XX) XXXXX-XXXX"
-                    keyboardType="phone-pad"
-                />
-
-                <Text style={styles.label}>LinkedIn (URL)</Text>
-                <TextInput
-                    style={styles.input}
-                    value={profile.linkedin || ""}
-                    onChangeText={(v) => handleChange("linkedin", v)}
-                    placeholder="URL do seu perfil no LinkedIn"
-                />
+                <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.input}><Text style={profile.data_nascimento ? localStyles.dateTextFilled : localStyles.dateTextPlaceholder}>{profile.data_nascimento || "Selecionar"}</Text></TouchableOpacity>
+                {showDatePicker && <DateTimePicker value={date} mode="date" onChange={onDateChange} />}
+                <Text style={styles.label}>Telefone</Text>
+                <TextInput style={styles.input} value={profile.telefone} onChangeText={v => handleChange("telefone", v)} keyboardType="phone-pad" />
             </View>
-            
-            <Text style={localStyles.sectionHeader}>Localização e Ocupação</Text>
             <View style={localStyles.tabContainer}>
-                <TouchableOpacity 
-                    style={[localStyles.tabButton, activeTab === 'residencia' && localStyles.tabButtonActive]}
-                    onPress={() => setActiveTab('residencia')}
-                >
-                    <Feather name="home" size={16} color={activeTab === 'residencia' ? '#2563eb' : '#64748b'} />
-                    <Text style={[localStyles.tabText, activeTab === 'residencia' && localStyles.tabTextActive]}>Residência</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[localStyles.tabButton, activeTab === 'trabalho' && localStyles.tabButtonActive]}
-                    onPress={() => setActiveTab('trabalho')}
-                >
-                    <Feather name="briefcase" size={16} color={activeTab === 'trabalho' ? '#2563eb' : '#64748b'} />
-                    <Text style={[localStyles.tabText, activeTab === 'trabalho' && localStyles.tabTextActive]}>Trabalho</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={[localStyles.tabButton, activeTab === 'residencia' && localStyles.tabButtonActive]} onPress={() => setActiveTab('residencia')}><Text>Residência</Text></TouchableOpacity>
+                <TouchableOpacity style={[localStyles.tabButton, activeTab === 'trabalho' && localStyles.tabButtonActive]} onPress={() => setActiveTab('trabalho')}><Text>Trabalho</Text></TouchableOpacity>
             </View>
-
-            <View style={localStyles.tabContentBox}>
-                {activeTab === 'residencia' ? 
-                    <LocalResidenciaTab 
-                        key="residencia_tab" 
-                        profile={profile} 
-                        handleChange={handleChange} 
-                    /> 
-                    : 
-                    <LocalTrabalhoTab 
-                        key="trabalho_tab" 
-                        profile={profile} 
-                        handleChange={handleChange} 
-                        activeTab={activeTab}
-                    />
-                }
-            </View>
-            
-            <Text style={[localStyles.sectionHeader, { marginTop: 20 }]}>Formação Acadêmica</Text>
-            {FORMACAO_TITLES.map((title, index) => (
-                <View key={index} style={styles.formacaoBox}>
-                    <Text style={styles.formacaoTitle}>Formação {index + 1}: {title}</Text>
-
-                    <Text style={styles.label}>Instituição</Text>
-                    <TextInput
-                        style={[styles.input, { marginBottom: 10 }]}
-                        value={formacoes[index].instituicao}
-                        onChangeText={(v) => handleFormacaoChange(index, "instituicao", v)}
-                        placeholder="Nome da Instituição (Ex: IFAL)"
-                    />
-                    
-                    <Text style={styles.label}>Curso </Text>
-                    <TouchableOpacity 
-                        style={styles.input}
-                        onPress={() => openCourseModal(index)}
-                    >
-                        <Text style={formacoes[index].curso ? localStyles.dateTextFilled : localStyles.dateTextPlaceholder}>
-                            {formacoes[index].curso || "Selecionar Curso"}
-                        </Text>
+            <View style={localStyles.tabContentBox}>{activeTab === 'residencia' ? <LocalResidenciaTab profile={profile} handleCEPChange={handleCEPChange} /> : <LocalTrabalhoTab profile={profile} handleChange={handleChange} />}</View>
+            {FORMACAO_TITLES.map((t, i) => (
+                <View key={i} style={styles.formacaoBox}>
+                    <Text style={styles.formacaoTitle}>{t}</Text>
+                    <TextInput style={styles.input} placeholder="Instituição" value={formacoes[i].instituicao} onChangeText={v => handleFormacaoChange(i, "instituicao", v)} />
+                    <TouchableOpacity style={styles.input} onPress={() => { setCurrentFormacaoIndex(i); setIsCourseModalVisible(true); }}>
+                        <Text style={formacoes[i].curso ? styles.inputText : styles.inputPlaceholder}>{formacoes[i].curso || "Selecionar Curso"}</Text>
                     </TouchableOpacity>
-
-                    <Text style={styles.label}>Período</Text>
-                    <TextInput
-                        style={styles.input}
-                        value={formacoes[index].periodo}
-                        onChangeText={(v) => handleFormacaoChange(index, "periodo", v)}
-                        placeholder="Período (Ex: 2018 - 2022)"
-                    />
+                    <TextInput style={styles.input} placeholder="Período" value={formacoes[i].periodo} onChangeText={v => handleFormacaoChange(i, "periodo", v)} />
                 </View>
             ))}
-
-            <TouchableOpacity
-                style={[styles.saveBtn, { opacity: saving ? 0.6 : 1 }]}
-                onPress={handleSave}
-                disabled={saving}
-            >
-                {saving ? (
-                    <ActivityIndicator color="#fff" />
-                ) : (
-                    <Text style={styles.saveText}>Salvar Configurações</Text>
-                )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-                style={styles.signOutBtn}
-                onPress={handleSignOut}
-            >
-                <Feather name="log-out" size={20} color="#dc2626" />
-                <Text style={styles.signOutText}>Sair da Conta</Text>
-            </TouchableOpacity>
-            
-            <CourseSelectionModal />
-
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>{saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Salvar</Text>}</TouchableOpacity>
+            <TouchableOpacity style={styles.signOutBtn} onPress={() => supabase.auth.signOut()}><Text style={styles.signOutText}>Sair</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.signOutBtn, { borderColor: '#dc2626', marginTop: 10, marginBottom: 40 }]} onPress={handleDeleteAccount}><Text style={{ color: '#dc2626', fontWeight: 'bold' }}>Excluir Conta</Text></TouchableOpacity>
+            <Modal visible={isCourseModalVisible} transparent animationType="fade">
+                <View style={localStyles.modalOverlay}><View style={localStyles.modalContent}>
+                    {CURSOS_FIXOS.map(c => (
+                        <TouchableOpacity key={c} style={localStyles.modalOption} onPress={() => { handleFormacaoChange(currentFormacaoIndex!, 'curso', c); setIsCourseModalVisible(false); }}>
+                            <Text style={localStyles.modalOptionText}>{c}</Text>
+                        </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity onPress={() => setIsCourseModalVisible(false)} style={{ marginTop: 8, alignItems: 'center' }}>
+                        <Text style={localStyles.modalCloseButtonText}>Fechar</Text>
+                    </TouchableOpacity>
+                </View></View>
+            </Modal>
         </ScrollView>
     );
 }
 
+ 
 const styles = StyleSheet.create({
-    container: { flex: 1, padding: 18, backgroundColor: '#f9f9f9' },
-    loadingView: { flex: 1, justifyContent: "center", alignItems: "center" },
+    container: { 
+        flex: 1, 
+        padding: 18, 
+        backgroundColor: '#0f172a' 
+    },
 
-    title: { fontSize: 26, fontWeight: "700", marginBottom: 20, color: '#1f2937' },
+    loadingView: { 
+        flex: 1, 
+        justifyContent: "center", 
+        alignItems: "center" 
+    },
 
-    label: { fontWeight: "600", marginTop: 12, marginBottom: 4, color: '#374151' },
+    title: { 
+        fontSize: 26, 
+        fontWeight: "700", 
+        marginBottom: 20, 
+        color: '#f8fafc' 
+    },
+
+    label: { 
+        fontWeight: "600", 
+        marginTop: 12, 
+        marginBottom: 4, 
+        color: '#94a3b8' 
+    },
 
     input: {
         padding: 12,
         borderWidth: 1,
-        borderColor: "#d1d5db",
+        borderColor: "#334155",
         borderRadius: 10,
-        backgroundColor: "#fff",
-        color: '#1f2937',
+        backgroundColor: "#1e293b",
+        color: '#f1f5f9',
         fontSize: 15,
         justifyContent: 'center', 
         minHeight: 48,
@@ -715,19 +405,37 @@ const styles = StyleSheet.create({
         marginTop: 28,
         marginBottom: 15
     },
-    saveText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 
+    saveText: { 
+        color: "#ffffff", 
+        fontWeight: "700", 
+        fontSize: 16 
+    },
 
     formacaoBox: {
         marginTop: 10,
         padding: 15,
-        backgroundColor: "#fff",
+        backgroundColor: "#1e293b",
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#e5e7eb'
+        borderColor: '#334155'
     },
-    formacaoTitle: { fontWeight: "800", marginBottom: 8, color: '#1f2937' },
+
+    formacaoTitle: { 
+        fontWeight: "800", 
+        marginBottom: 8, 
+        color: '#f8fafc' 
+    },
     
+    inputText: {
+        color: '#f1f5f9',
+        fontSize: 15,
+    },
+
+    inputPlaceholder: {
+        color: '#64748b',
+        fontSize: 15,
+    },
     signOutBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -735,48 +443,54 @@ const styles = StyleSheet.create({
         padding: 14,
         borderRadius: 12,
         marginTop: 10,
-        marginBottom: 40,
-        backgroundColor: '#fee2e2',
-        borderColor: '#fca5a5',
+        marginBottom: 10,
+        backgroundColor: '#1e293b',
+        borderColor: '#dc2626',
         borderWidth: 1,
     },
+
     signOutText: {
-        color: "#dc2626",
+        color: "#ef4444",
         fontWeight: "700",
         fontSize: 16,
         marginLeft: 10
     }
 });
-
 const localStyles = StyleSheet.create({
     sectionHeader: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: '#0f172a',
+        color: '#f8fafc',
         marginTop: 25,
         marginBottom: 10,
         borderLeftWidth: 4,
         borderLeftColor: '#2563eb',
         paddingLeft: 8,
     },
+
     sectionBox: {
         padding: 15,
-        backgroundColor: "#fff",
+        backgroundColor: "#1e293b",
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: '#334155',
     },
+
     statusBox: {
         padding: 10,
-      
         borderRadius: 8,
         borderWidth: 1,
+        borderColor: '#334155',
         marginTop: 5,
         marginBottom: 10, 
+        backgroundColor: '#0f172a'
     },
+
     statusText: {
         fontWeight: '700',
+        color: '#f1f5f9'
     },
+
     verificationHint: {
         fontSize: 12,
         color: '#64748b',
@@ -784,22 +498,24 @@ const localStyles = StyleSheet.create({
     },
 
     dateTextFilled: {
-        color: '#1f2937', 
+        color: '#f1f5f9', 
         fontSize: 15,
     },
+
     dateTextPlaceholder: {
-        color: '#9ca3af', 
+        color: '#64748b', 
         fontSize: 15,
     },
 
     tabContainer: {
         flexDirection: 'row',
         marginBottom: 10,
-        backgroundColor: '#fff',
+        backgroundColor: '#1e293b',
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
+        borderColor: '#334155',
     },
+
     tabButton: {
         flex: 1,
         flexDirection: 'row',
@@ -809,40 +525,44 @@ const localStyles = StyleSheet.create({
         borderBottomWidth: 2,
         borderBottomColor: 'transparent',
     },
+
     tabButtonActive: {
         borderBottomColor: '#2563eb',
-        backgroundColor: '#f0f4ff', 
+        backgroundColor: '#0f172a', 
         borderRadius: 8,
     },
+
     tabText: {
         marginLeft: 5,
         fontSize: 15,
         fontWeight: '600',
-        color: '#64748b',
+        color: '#94a3b8',
     },
+
     tabTextActive: {
-        color: '#2563eb',
+        color: '#3b82f6',
     },
+
     tabContentBox: {
         padding: 15,
-        backgroundColor: "#fff",
+        backgroundColor: "#1e293b",
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#e5e7eb',
-    },
-    tabContent: {
-      
+        borderColor: '#334155',
     },
 
     selectContainer: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        backgroundColor: '#f3f4f6',
+        backgroundColor: '#0f172a',
         borderRadius: 8,
         padding: 5,
         marginTop: 5,
         marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#334155',
     },
+
     selectOption: {
         flex: 1,
         paddingVertical: 10,
@@ -850,58 +570,69 @@ const localStyles = StyleSheet.create({
         borderRadius: 6,
         marginHorizontal: 2,
     },
+
     selectOptionActive: {
         backgroundColor: '#2563eb',
     },
+
     selectText: {
-        color: '#4b5563',
+        color: '#94a3b8',
         fontWeight: '600',
     },
+
     selectTextActive: {
-        color: '#fff',
+        color: '#ffffff',
         fontWeight: '600',
     },
    
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
         justifyContent: 'center',
         alignItems: 'center',
     },
+
     modalContent: {
         width: '90%',
-        backgroundColor: 'white',
+        backgroundColor: '#1e293b',
         borderRadius: 15,
         padding: 20,
         maxHeight: '80%',
+        borderWidth: 1,
+        borderColor: '#334155',
     },
+
     modalTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 15,
-        color: '#1f2937',
+        color: '#f8fafc',
         borderBottomWidth: 1,
-        borderBottomColor: '#e5e7eb',
+        borderBottomColor: '#334155',
         paddingBottom: 10,
     },
+
     modalOption: {
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#f3f4f6',
+        borderBottomColor: '#334155',
     },
     modalOptionText: {
         fontSize: 16,
-        color: '#374151',
+        color: '#e2e8f0',
     },
+
     modalCloseButton: {
         marginTop: 15,
         padding: 12,
-        backgroundColor: '#e5e7eb',
+        backgroundColor: '#0f172a',
         borderRadius: 10,
         alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#334155'
     },
     modalCloseButtonText: {
-        color: '#374151',
+        color: '#94a3b8',
         fontWeight: '700',
     }
 });
