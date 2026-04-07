@@ -23,7 +23,7 @@ export async function geocodeCEP(
     }
 
     try {
-        // 🔹 1️⃣ Busca dados do endereço no ViaCEP
+       
         const viaCepResponse = await fetch(`https://viacep.com.br/ws/${cepClean}/json/`);
 
         if (!viaCepResponse.ok) {
@@ -48,7 +48,7 @@ export async function geocodeCEP(
             return null;
         }
 
-        // 🔹 2️⃣ Monta endereços para tentativa de geocodificação
+     
         const fullAddress = [logradouro, bairro, localidade, uf, "Brasil"]
             .filter(Boolean)
             .join(", ");
@@ -62,7 +62,7 @@ export async function geocodeCEP(
         let latitude: number | undefined;
         let longitude: number | undefined;
 
-        // 🔹 3️⃣ Tenta geocodificar via Nominatim
+      
         for (const addressQuery of addressesToTry) {
 
             const nominatimUrl =
@@ -90,7 +90,6 @@ export async function geocodeCEP(
             return null;
         }
 
-        // 🔹 4️⃣ Retorno final estruturado
         return {
             latitude,
             longitude,
