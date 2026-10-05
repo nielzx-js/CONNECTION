@@ -1,6 +1,9 @@
+
 Já se perguntou por onde seu amigo antigo anda? 
 onde ele se formou ou coisas do tipo?
 esse escopo visa tratar justamente esse problema. 
 O conexão egressos tem objetivo de, interligar os colegas através dos cadastros podendo filtrar por curso/formação.
 Exemplo: Se um aluno do IFAL se cadastrar, ele consegue ver apenas quem é do ifal e de mesmo curso.
 Se você for uma empresa, dependendo do plano, consegue ver todos os alunos afim de entrar em contato para estágios ou algo do tipo.
+
+outro detalhe: há um ano cometi o erro de deixar as api's expostas. Pode ir atrás pelo commit, estão todas desativadas e não servem pra mais nada.
